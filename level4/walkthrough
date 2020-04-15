@@ -1,4 +1,5 @@
-# Same principle as before, except this time the value is larger :
+# Disassembly of the vulnerable function :
+
 (gdb) disas n
 Dump of assembler code for function n:
 	0x08048457 <+0>:	push   %ebp
@@ -22,11 +23,13 @@ Dump of assembler code for function n:
 	0x080484a6 <+79>:	ret
 End of assembler dump.
 
-# 0x1025544(16) == 16 millions, so instead, let's copy in halves, in order to
-# speed up the process of writing the output to stdout.
-# 0x102 and 0x5544 => 258 + 21828.
-# We'll need to copy the high order bytes first, because otherwise the byte
-# count will be too high.
+# Same exploit as level3, except here the value is very large.
+# 0x1025544(16) == 16 millions, so instead, let's copy two half-words,
+# in order to speed up the process of writing the output of the conversion
+# to stdout.
+# 0x102 and 0x5544 => 258 + 21828 bytes written, which is much less than previously.
+# We'll need to copy the smallest half word first, for obvious reasons.
+# Here it is the high order one.
 # Relevant stack memory dump, this will be useful to identify which positional
 # indexes to use :
 

