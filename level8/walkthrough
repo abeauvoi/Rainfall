@@ -38,7 +38,7 @@ Dump of assembler code for function main:
    0x0804859f <+59>:	movl   $0x80,0x4(%esp)
    0x080485a7 <+67>:	lea    0x20(%esp),%eax
    0x080485ab <+71>:	mov    %eax,(%esp)
-   0x080485ae <+74>:	call   0x8048440 <fgets@plt> <== fgets(buf, 0x80, 0x8049a80)
+   0x080485ae <+74>:	call   0x8048440 <fgets@plt> <== fgets(buf, 0x80, stdin)
    0x080485b3 <+79>:	test   %eax,%eax
    0x080485b5 <+81>:	je     0x804872c <main+456> { <== if (fgets(...) != NULL)
 
