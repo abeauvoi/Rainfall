@@ -1,0 +1,12 @@
+# address of buffer in main function : 0xbffff6d0
+# main() $ebp + 4 : 0xbffff70c
+# main() address of ret ins : 0x80485cb
+# address of system : 0xb7e6b060
+# address of exit : 0xb7e5ebe0
+# payload idea :
+
+[52 bytes        ][12 bytes               ][64 bytes]
+[padding][new ret][system][exit]["/bin/sh"]
+
+[20 bytes][12 bytes               ][32 bytes]
+[AAA][ret][system][exit]["/bin/sh"]
