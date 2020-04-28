@@ -22,7 +22,7 @@ void 	pp(char *buf0) {
 }
 
 int		main(int ac, char *av[]) {
-	char 	buf[];
+	char 	buf[0x32];
 
 	pp(buf);
 	puts(buf);
