@@ -1,0 +1,26 @@
+#include <stdio.h>
+#include <string.h>
+
+void
+p()
+{
+	void 	*ret;
+	char 	buf[64];
+
+	fflush(stdout);
+	gets(buf);
+	ret = __builtin_return_address(0);
+	if (((int)ret & 0xb0000000) == 0xb0000000)
+	{
+		printf("(%p)\n", ret);
+		_exit(1);
+	}
+	puts(buf);
+	strdup(buf);
+}
+
+void
+main(void)
+{
+	p();
+}

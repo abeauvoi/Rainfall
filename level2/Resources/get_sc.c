@@ -2,5 +2,5 @@
 #include <stdlib.h>
 
 void main(void) {
-	printf("%p\n", getenv("SHELL"));
+	printf("%p\n", getenv("SHELLCODE"));
 }

